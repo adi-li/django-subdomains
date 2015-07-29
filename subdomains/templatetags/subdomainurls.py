@@ -50,4 +50,5 @@ def url(context, view, scheme=None, subdomain=UNSET, port=UNSET, *args, **kwargs
     if scheme is None and request is not None and hasattr(request, 'scheme'):
         scheme = request.scheme
 
-    return reverse(view, scheme=scheme, subdomain=subdomain, port=port, args=args, kwargs=kwargs)
+    return reverse(view, scheme=scheme, subdomain=subdomain, port=port,
+                   args=args, kwargs=kwargs)

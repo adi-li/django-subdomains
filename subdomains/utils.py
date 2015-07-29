@@ -7,6 +7,8 @@ except ImportError:
 from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.urlresolvers import reverse as simple_reverse
+from django.utils import six
+from django.utils.functional import lazy
 
 
 def current_site_domain():
@@ -37,13 +39,15 @@ def urljoin(domain, path=None, scheme=None, port=None):
         scheme = getattr(settings, 'DEFAULT_URL_SCHEME', 'http')
 
     if port is not None:
-        domain = '{0}:{1}'.format(domain, port)
+        if (scheme == 'http' and port != 80) or\
+                (scheme == 'https' and port != 443):
+            domain = '{0}:{1}'.format(domain, port)
 
     return urlunparse((scheme, domain, path or '', None, None, None))
 
 
-def reverse(viewname, subdomain=None, scheme=None, port=None, args=None, kwargs=None,
-        current_app=None):
+def reverse(viewname, subdomain=None, scheme=None, port=None,
+            args=None, kwargs=None, current_app=None):
     """
     Reverses a URL from the given parameters, in a similar fashion to
     :meth:`django.core.urlresolvers.reverse`.
@@ -62,7 +66,7 @@ def reverse(viewname, subdomain=None, scheme=None, port=None, args=None, kwargs=
         domain = '%s.%s' % (subdomain, domain)
 
     path = simple_reverse(viewname, urlconf=urlconf, args=args, kwargs=kwargs,
-        current_app=current_app)
+                          current_app=current_app)
     return urljoin(domain, path, scheme=scheme, port=port)
 
 
@@ -74,3 +78,6 @@ secure_reverse = functools.partial(reverse, scheme='https')
 
 #: :func:`reverse` bound to be relative to the current scheme
 relative_reverse = functools.partial(reverse, scheme='')
+
+#: A lazily evaluated version of :func:`reverse`
+reverse_lazy = lazy(reverse, six.text_type)
