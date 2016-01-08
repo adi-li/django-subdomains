@@ -1,20 +1,16 @@
+import functools
 import mock
 import warnings
+try:
+    import urlparse
+except ImportError:  # Python 3
+    from urllib import parse as urlparse
 
-from django.contrib.sites.models import Site
 from django.core.urlresolvers import NoReverseMatch, set_urlconf
-from django.test import TestCase
 from django.template import Context, Template
-
-try:
-    from django.test.client import RequestFactory
-except ImportError:
-    from subdomains.compat.requestfactory import RequestFactory  # noqa
-
-try:
-    from django.test.utils import override_settings
-except ImportError:
-    from subdomains.compat.tests import override_settings  # noqa
+from django.test import TestCase
+from django.test.client import RequestFactory
+from django.test.utils import override_settings
 
 from subdomains.middleware import (SubdomainMiddleware,
     SubdomainURLRoutingMiddleware)
@@ -23,7 +19,7 @@ from subdomains.utils import reverse, urljoin
 
 def prefix_values(dictionary, prefix):
     return dict((key, '%s.%s' % (prefix, value))
-        for key, value in dictionary.iteritems())
+        for key, value in dictionary.items())
 
 
 class SubdomainTestMixin(object):
@@ -32,6 +28,7 @@ class SubdomainTestMixin(object):
 
     def setUp(self):
         super(SubdomainTestMixin, self).setUp()
+        from django.contrib.sites.models import Site
         self.site = Site.objects.get_current()
         self.site.domain = self.DOMAIN
         self.site.save()
@@ -162,9 +159,26 @@ class SubdomainURLRoutingTestCase(SubdomainTestMixin, TestCase):
     def test_appends_slash(self):
         for subdomain in (None, 'api', 'wildcard'):
             host = self.get_host_for_subdomain(subdomain)
-            response = self.client.get('/example', HTTP_HOST=host)
+            path = '/example'  # No trailing slash.
+            response = self.client.get(path, HTTP_HOST=host)
             self.assertEqual(response.status_code, 301)
-            self.assertEqual(response['Location'], 'http://%s/example/' % host)
+
+            # Whether the response's Location header contains the URL prefix
+            # here doesn't actually matter, since it will be considered
+            # relative to the request URL, which *did* include the HTTP Host
+            # header. To pave over inconsistencies between Django versions, we
+            # normalize them both to be prefixed with the requested host. (If a
+            # *different* base host is returned in the Location header, this
+            # should override our default base and error.)
+            normalize = functools.partial(
+                urlparse.urljoin,
+                'http://%s/' % (host,),
+            )
+
+            self.assertEqual(
+                normalize(response['Location']),
+                normalize(path + '/'),
+            )
 
 
 class SubdomainURLReverseTestCase(SubdomainTestMixin, TestCase):
